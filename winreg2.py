@@ -1,54 +1,68 @@
 import os
 import sys
 
-# Version compat
+
 if sys.version_info[0] == 2:
 	import _winreg as win
 else:
 	import winreg as win
 
-HKEY_LOCAL_MACHINE = win.HKEY_LOCAL_MACHINE
+STANDARD_KEYS = {
+	'HKLM': win.HKEY_LOCAL_MACHINE,
+	'HKEY_LOCAL_MACHINE': win.HKEY_LOCAL_MACHINE,
+}
+	
 
-class RegistryKey:
-	""" Wrapper for winreg Key object with high-level methods. """
-	
-	def __init__(self, reg, name):
-		self._reg = reg
+class RegistryKey():
+	""" Wrapper for winreg Key objects. """
+
+	def __init__(self, name):
 		self.name = name
-		self._attribs = {}
 		
-	def _init_attributes(self):
-		attrib_count, _, _ = win.QueryInfoKey(self.key)
-		for index in range(attrib_count):
-			try:
-				attr = win.EnumValue(self.key, index)
-				self._attribs[attr[0]] = attr[1]
-			except OSError as e:
-				pass
-			except:
-				raise
-	
-	def __contains__(self, item):
-		return item in self._attribs
+	@property
+	def contains_values(self):
+		return win.QueryInfoKey(self.key)[1] > 0
 
 	def __getitem__(self, item):
-		return self._attribs[item]
+		return win.QueryValueEx(self.key, item)[0]
+	
+	def get(self, item, default_value):
+		value = None
+		try:
+			value = self.__getitem__(item)
+		except FileNotFoundError as e:
+			value = default_value
+		return value
+	
+	def _get_registry_values(self):
+		_, value_count, _ = win.QueryInfoKey(self.key)
+		for index in range(value_count):
+			yield win.EnumValue(self.key, index)
+	
+	def keys(self):
+		return map(lambda v: v[0], self._get_registry_values())
+		
+	def values(self):
+		return map(lambda v: v[1], self._get_registry_values())
+	
+	def items(self):
+		return map(lambda v: (v[0], v[1]), self._get_registry_values())
 	
 	def walk(self):
 		""" Recursively traverses all sub-keys in tree. """
-		child_count, _, _ = win.QueryInfoKey(self.key)
+		key_count, _, _ = win.QueryInfoKey(self.key)
 		yield self
-		for index in range(child_count):
-			child = self.__class__(self._reg, self.name + "\\" + win.EnumKey(self.key, index))
+		for index in range(key_count):
+			child = self.__class__(self.name + "\\" + win.EnumKey(self.key, index))
 			with child as c:
 				yield from c.walk()
-
-	def __enter__(self):
-		self.key = win.OpenKey(self._reg, self.name)
-		self._init_attributes()
-		return self
 	
-	def __exit__(self, e_type, e_value, e_traceback):
+	def __enter__(self):
+		key_code, key_path = self.name.split(':')
+		self.key = win.OpenKey(STANDARD_KEYS[key_code], key_path)
+		return self
+		
+	def __exit__(self, type_, value, traceback):
 		win.CloseKey(self.key)
-		if e_type is not None:
-			raise
+		if type_:
+			type_(value)
