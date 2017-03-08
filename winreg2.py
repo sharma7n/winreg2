@@ -40,13 +40,13 @@ class RegistryKey():
 			yield win.EnumValue(self.key, index)
 	
 	def keys(self):
-		return map(lambda v: v[0], self._get_registry_values())
+		return (value[0] for value in self._get_registry_values())
 		
 	def values(self):
-		return map(lambda v: v[1], self._get_registry_values())
+		return (value[1] for value in self._get_registry_values())
 	
 	def items(self):
-		return map(lambda v: (v[0], v[1]), self._get_registry_values())
+		return zip(self.keys(), self.values())
 	
 	def walk(self):
 		""" Recursively traverses all sub-keys in tree. """
