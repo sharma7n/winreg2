@@ -1,7 +1,3 @@
-import os
-import sys
-
-
 if sys.version_info[0] == 2:
 	import _winreg as win
 else:
